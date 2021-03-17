@@ -1,0 +1,11 @@
+---
+- name: Deploy_{{ JEN_VAR_service_name }}
+  hosts: prod_{{ JEN_VAR_service_name }}
+  serial: 1
+
+  vars:
+     aws_account_id: "{{ JEN_VAR_aws_account_id }}"
+     aws_region: "{{ JEN_VAR_aws_region }}"
+
+  roles:
+    - {{ ansible_default_role_name }}

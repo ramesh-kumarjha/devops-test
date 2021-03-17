@@ -1,0 +1,23 @@
+---
+
+container_name: "{{ JEN_VAR_service_name }}"
+preprod_tg_arn: "{{ JEN_VAR_preprod_elbv2_target_arn }}"
+prod_tg_arn: "{{ JEN_VAR_prod_elbv2_target_arn }}"
+preprod_app_port: "{{ JEN_VAR_preprod_app_port }}"
+prod_app_port: "{{ JEN_VAR_prod_app_port }}"
+{% raw %}
+health_check_dir: "/var/health_check/{{ container_name }}"
+health_check_file: "{{ health_check_dir }}/health.html"
+
+docker_registry_url: "{{ aws_account_id }}.dkr.ecr.{{ aws_region }}.amazonaws.com"
+preprod_docker_image: "{{ docker_registry_url }}/{{ container_name }}:{{ image_tag }}"
+{% endraw %}
+{% if JEN_VAR_do_prod_build == 'true' %}
+{% raw %}
+prod_docker_image: "{{ docker_registry_url }}/prod-{{ container_name }}:{{ image_tag }}"
+{% endraw %}
+{% else %}
+{% raw %}
+prod_docker_image: "{{ docker_registry_url }}/{{ container_name }}:{{ image_tag }}"
+{% endraw %}
+{% endif %}

@@ -1,0 +1,67 @@
+{% raw %}
+---
+- name: "Initialize variables"
+  block:
+    - name: Get the Instance-ID of the Current server
+      shell: ec2metadata --instance-id
+      register: ec2_instance_id
+
+    - set_fact:
+        elbv2_target_arn: "{{ preprod_tg_arn }}"
+        docker_image: "{{ preprod_docker_image }}"
+      when: ( release_env == "preprod" )
+
+    - set_fact:
+        elbv2_target_arn: "{{ prod_tg_arn }}"
+        docker_image: "{{ prod_docker_image }}"
+      when: ( release_env == "prod" )
+    - set_fact:
+        app_port: "{{ preprod_app_port }}"
+      when: ( release_env == "preprod" )
+    - set_fact:
+        app_port: "{{ prod_app_port }}"
+      when: ( release_env == "prod" )
+
+- name: "Pull docker image"
+  shell: "docker pull {{ docker_image }}"
+  become: true
+  become_user: ubuntu
+
+- name: "Make instance unhealthy"
+  block:
+    - name: Remove health check file for making current instance out of service
+      shell: rm -rf "{{ health_check_file }}"
+
+    - name: Wait until the instance is unhealthy
+      shell: >
+          aws elbv2 describe-target-health  \
+          --target-group-arn "{{ elbv2_target_arn }}"   \
+          --query "TargetHealthDescriptions[*].{Name:Target.Id,health:TargetHealth.State}" --output=text  \
+          --region  "{{ aws_region }}"| grep "{{ ec2_instance_id.stdout }}" | awk '{print $2}'
+      register: health_inst
+      until:   "{{ health_inst.stdout == 'unhealthy'}}"
+      retries: 10
+      delay: 10
+
+- name: "Stop currently running container"
+  shell: "docker rm -f {{ container_name }} || true"
+
+- name: "Start the container from {{ docker_image }} image"
+  shell: "docker run -i -t --rm -d -p {{ app_port }}:{{ app_port }} --name {{ container_name }} --volume {{ health_check_dir }}:/health  -e RELEASE_ENV={{ release_env }} {{ docker_image }}"
+
+- name: "Make instance healthy"
+  block:
+    - name: "Put back health check file"
+      shell: touch "{{ health_check_file }}" ; chown ubuntu:ubuntu "{{ health_check_file }}"
+
+    - name: Wait until the instance is healthy
+      shell: >
+          aws elbv2 describe-target-health  \
+          --target-group-arn "{{ elbv2_target_arn }}"   \
+          --query "TargetHealthDescriptions[*].{Name:Target.Id,health:TargetHealth.State}" --output=text  \
+          --region  "{{ aws_region }}"| grep "{{ ec2_instance_id.stdout }}" | awk '{print $2}'
+      register: health_inst
+      until:   "{{ health_inst.stdout == 'healthy'}}"
+      retries: 10
+      delay: 15
+{% endraw %}
