@@ -65,7 +65,7 @@ class DockerEcr implements Serializable {
     }
 
     void buildDockerImage(String microserviceName, String releaseEnv) {
-        this.script.sh("docker build -t ${dockerRegistryIdentifier}/${microserviceName}:${this.tag} --build-arg RELEASE_ENV=${releaseEnv}  --build-arg  .")
+        this.script.sh("docker build -t ${dockerRegistryIdentifier}/${microserviceName}:${this.tag} --build-arg RELEASE_ENV=${releaseEnv}  .")
     }
 
 
