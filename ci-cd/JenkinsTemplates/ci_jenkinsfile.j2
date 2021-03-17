@@ -1,0 +1,30 @@
+String AWS_ACCOUNT_ID = "{{ JEN_VAR_aws_account_id }}"
+String AWS_REGION_NAME = "{{ JEN_VAR_aws_region }}"
+String SERVICE_NAME = "{{ JEN_VAR_service_name }}"
+String RELEASE_ENV = "preprod"
+String REPOSITORY_NAME = "{{ JEN_VAR_github_repo_name }}"
+DockerEcr dockerEcr = new DockerEcr(this, AWS_ACCOUNT_ID, AWS_REGION_NAME)
+Git git = new Git(this)
+    
+node('slave') {
+    try {
+        stage('Checkout') {
+            git.checkout(REPOSITORY_NAME, params.branch_name)
+            dockerEcr.createGitTag(git)
+        }
+    
+        stage('Build') {
+            dockerEcr.buildDockerImage(SERVICE_NAME, "${RELEASE_ENV}" )
+        }
+        
+        stage('Validate') {
+            dockerEcr.validateDockerImage(SERVICE_NAME)
+        }
+    } catch(e) {
+    	currentBuild.result = 'FAILURE'
+    	throw e
+    } finally {
+    	def buildResult = currentBuild.result ?: 'SUCCESS'
+    	handlePostBuildCI(buildResult, REPOSITORY_NAME, params, env, "{{ JEN_VAR_slack_channel }}")
+    }
+}

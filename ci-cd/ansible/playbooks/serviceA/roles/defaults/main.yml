@@ -1,0 +1,12 @@
+container_name: ""
+preprod_tg_arn: ""
+prod_tg_arn: ""
+app_port: "3000"
+
+health_check_dir: "/var/health_check/{{ container_name }}"
+health_check_file: "{{ health_check_dir }}/health.html"
+
+docker_registry_url: "{{ aws_account_id }}.dkr.ecr.{{ aws_region }}.amazonaws.com"
+preprod_docker_image: "{{ docker_registry_url }}/{{ container_name }}:{{ image_tag }}"
+prod_docker_image: "{{ docker_registry_url }}/prod-{{ container_name }}:{{ image_tag }}"
+

@@ -1,0 +1,68 @@
+String AWS_ACCOUNT_ID = "{{ JEN_VAR_aws_account_id }}"
+String AWS_REGION_NAME = "{{ JEN_VAR_aws_region }}"
+String RELEASE_ENV = "preprod"
+String SERVICE_NAME = "{{ JEN_VAR_service_name }}"
+String REPOSITORY_NAME = "{{ JEN_VAR_github_repo_name }}"
+
+{% if JEN_VAR_do_prod_build == 'true' %}
+String PROD_SERVICE_NAME = "prod-$SERVICE_NAME"
+{% endif %}
+
+DockerEcr dockerEcr = new DockerEcr(this, AWS_ACCOUNT_ID, AWS_REGION_NAME)
+Git git = new Git(this)
+
+try {
+
+	node('slave') {
+
+	    stage('Checkout') {
+	        git.checkout(REPOSITORY_NAME, params.branch_name)
+	        dockerEcr.createGitTag(git)
+	    }
+
+	    stage('Build') {
+	        dockerEcr.buildDockerImage(SERVICE_NAME, RELEASE_ENV)
+	    }
+	    
+	    stage('Validate') {
+	        dockerEcr.validateDockerImage(SERVICE_NAME)
+	    }
+
+	    stage('Push') {
+	        dockerEcr.publishDockerImageToECR(SERVICE_NAME)
+	    }
+	
+	    stage('Deploy') {
+	        execAnsiblePlaybook("{{ ansible_preprod_playbook_file }}",
+	                "{{ ansible_preprod_inventory_file }}",
+	                [
+	                    image_tag: dockerEcr.tag,
+	                    release_env: RELEASE_ENV
+	                ]
+	        )
+	    }
+
+    {% if JEN_VAR_do_prod_build == 'true' %}
+
+	    stage('Build [PROD]') {
+		dockerEcr.buildDockerImage(PROD_SERVICE_NAME, "prod")
+	    }
+
+	    stage('Validate [PROD]') {
+		dockerEcr.validateDockerImage(PROD_SERVICE_NAME)
+	    }
+
+	    stage('Push [PROD]') {
+		dockerEcr.publishDockerImageToECR(PROD_SERVICE_NAME)
+	    }
+
+    {% endif %}
+    }
+
+} catch(e) {
+	currentBuild.result = 'FAILURE'
+	throw e
+} finally {
+	def buildResult = currentBuild.result ?: 'SUCCESS'
+	handlePostBuildCD(buildResult, env.JOB_NAME, env.BUILD_URL, params.branch_name, "{{ JEN_VAR_slack_channel }}")
+}
