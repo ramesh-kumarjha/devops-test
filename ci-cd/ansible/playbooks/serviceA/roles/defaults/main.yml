@@ -1,4 +1,4 @@
-container_name: ""
+container_name: "serviceA"
 preprod_tg_arn: ""
 prod_tg_arn: ""
 app_port: "3000"
